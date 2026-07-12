@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent/internal configs (never commit these)
+.agents/
+.opencode/
+.issues/
+.agent-memory/
+CLAUDE.md
+STORY_ARCADE_COMMENT_REDESIGN.md
+SUBMISSION_REMINDER.md
+research/
+tui.json
+skills-lock.json
+scripts/

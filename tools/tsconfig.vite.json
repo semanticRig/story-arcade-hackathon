@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../dist/types/vite",
+    "tsBuildInfoFile": "../dist/types/vite/tsconfig.tsbuildinfo",
+    "customConditions": ["browser"],
+    "rootDir": ".."
+  },
+  "include": ["../vite.config.ts"],
+  "exclude": [],
+  "references": [
+    {
+      "path": "./tsconfig.client.json"
+    },
+    {
+      "path": "./tsconfig.server.json"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "story-arcade",
+  "post": {
+    "dir": "dist/client",
+    "entrypoints": {
+      "default": {
+        "inline": false,
+        "entry": "splash.html"
+      },
+      "game": {
+        "entry": "game.html"
+      }
+    }
+  },
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.cjs"
+  },
+  "permissions": {
+    "redis": true,
+    "reddit": true,
+    "http": {
+      "enable": true,
+      "domains": [
+        "api.groq.com",
+        "generativelanguage.googleapis.com"
+      ]
+    }
+  },
+  "scheduler": {
+    "tasks": {
+      "daily-rotation": {
+        "endpoint": "/internal/scheduler/daily-rotation",
+        "cron": "0 0 * * *"
+      }
+    }
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "New Story Arcade Post",
+        "description": "Create a new daily story-arcade post",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/post-create"
+      },
+      {
+        "label": "Moderate Prompts",
+        "description": "Review pending UGC prompt submissions",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/moderate-prompts"
+      }
+    ]
+  },
+  "forms": {
+    "moderatePrompt": "/internal/form/moderate-prompt"
+  },
+  "triggers": {
+    "onAppInstall": "/internal/triggers/on-app-install"
+  },
+  "dev": {
+    "subreddit": "story_arcade_dev"
+  },
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build"
+  }
+}
