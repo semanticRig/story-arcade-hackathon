@@ -33,6 +33,7 @@ import type {
 } from '../../shared/api';
 import { formatReceipt, formatWeeklyRecap } from '../../shared/commentFormat';
 import { CANVAS_PALETTE } from '../../shared/constants';
+import { computeStreak, computeBadges } from '../../shared/streak';
 import { generateDailyContent } from '../core/content';
 import { buildContentBank } from '../core/content';
 import { seedDemoData } from '../core/seed';
@@ -41,24 +42,10 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function yesterday(date: string): string {
-  const d = new Date(date);
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
-
 async function getUserStats(userId: string): Promise<UserStats> {
   const raw = await redis.get(`UserStats:${userId}`);
   if (raw) return JSON.parse(raw) as UserStats;
   return { streakDays: 0, lastPlayedDate: null, badges: [], roleTier: 'user' };
-}
-
-function computeBadges(streakDays: number): string[] {
-  const badges: string[] = [];
-  if (streakDays >= 3) badges.push('3-day');
-  if (streakDays >= 7) badges.push('7-day');
-  if (streakDays >= 30) badges.push('30-day');
-  return badges;
 }
 
 async function updateStreak(userId: string): Promise<void> {
@@ -71,12 +58,7 @@ async function updateStreak(userId: string): Promise<void> {
   await redis.expire(lockKey, 60);
 
   const stats = await getUserStats(userId);
-  if (stats.lastPlayedDate === date) return;
-  if (stats.lastPlayedDate === yesterday(date)) {
-    stats.streakDays += 1;
-  } else {
-    stats.streakDays = 1;
-  }
+  stats.streakDays = computeStreak(stats.streakDays, stats.lastPlayedDate, date);
   stats.lastPlayedDate = date;
   stats.badges = computeBadges(stats.streakDays);
   await redis.set(`UserStats:${userId}`, JSON.stringify(stats));
@@ -406,13 +388,13 @@ routes.post('/results/comment', async (c) => {
   if (!r) return c.json<ErrorResponse>({ status: 'error', message: 'Missing results' }, 400);
 
   // Phase 2: Cadence guard — one comment per user per prompt cycle
+  const date = today();
   const lockKey = `CommentLock:${date}:${userId}`;
   const existing = await redis.get(lockKey);
   if (existing) {
     return c.json<ErrorResponse>({ status: 'error', message: 'Already shared this session' }, 429);
   }
 
-  const date = today();
   const commentText = formatReceipt(r, subredditName ?? 'StoryArcade', postId);
 
   try {
@@ -452,13 +434,13 @@ routes.post('/weekly/recap/share', async (c) => {
   const r = body.recap;
   if (!r) return c.json<ErrorResponse>({ status: 'error', message: 'Missing recap data' }, 400);
 
+  const date = today();
   const lockKey = `CommentLock:${date}:${userId}:weekly`;
   const existing = await redis.get(lockKey);
   if (existing) {
     return c.json<ErrorResponse>({ status: 'error', message: 'Already shared your weekly recap today' }, 429);
   }
 
-  const date = today();
   const commentText = formatWeeklyRecap(r, subredditName ?? 'StoryArcade', postId as unknown as string);
 
   try {
@@ -655,16 +637,29 @@ routes.get('/weekly/recap', async (c) => {
   let bingoDayCount = 0;
   let totalConfessionVotes = 0;
 
-  for (const d of dates) {
-    const configRaw = await redis.get(`DailyConfig:${d}`);
-    if (!configRaw) continue;
-    const dailyConfig = JSON.parse(configRaw);
+  // Phase 1: Fetch all 7 daily configs in parallel
+  const configResults = await Promise.all(
+    dates.map(async (d) => {
+      const raw = await redis.get(`DailyConfig:${d}`);
+      return { date: d, config: raw ? (JSON.parse(raw) as DailyConfig) : null };
+    })
+  );
+
+  // Phase 2: For each day with a config, fetch aggregates in parallel
+  for (const { date: d, config: dailyConfig } of configResults) {
+    if (!dailyConfig) continue;
 
     for (const opt of dailyConfig.mood?.options ?? []) {
       moodOptions[opt.key] = opt;
     }
 
-    const moodAgg = await redis.hGetAll(`MoodAggregate:${d}`);
+    // Fetch mood + template + confession in parallel, then choices
+    const [moodAgg, templateAgg, confAgg] = await Promise.all([
+      redis.hGetAll(`MoodAggregate:${d}`),
+      redis.hGetAll(`TemplateAggregate:${d}:${dailyConfig.template?.id ?? ''}`),
+      redis.hGetAll(`ConfessionAggregate:${d}:${dailyConfig.confession?.id ?? ''}`),
+    ]);
+
     if (Object.keys(moodAgg).length > 0) {
       totalDaysPlayed++;
       for (const [k, v] of Object.entries(moodAgg)) {
@@ -672,27 +667,32 @@ routes.get('/weekly/recap', async (c) => {
       }
     }
 
-    for (const q of dailyConfig.questions ?? []) {
-      const choiceAgg = await redis.hGetAll(`ChoiceAggregate:${d}:${q.id}`);
-      if (Object.keys(choiceAgg).length > 0) {
-        let maxCount = 0;
-        let topOptId = '';
-        for (const [k, v] of Object.entries(choiceAgg)) {
-          const count = parseInt(v ?? '0');
-          if (count > maxCount) {
-            maxCount = count;
-            topOptId = k;
+    // Choice aggregates — fetch in parallel per question
+    if (dailyConfig.questions && dailyConfig.questions.length > 0) {
+      const choiceResults = await Promise.all(
+        dailyConfig.questions.map(async (q) => {
+          const agg = await redis.hGetAll(`ChoiceAggregate:${d}:${q.id}`);
+          return { question: q, aggregate: agg };
+        })
+      );
+      for (const { question: q, aggregate: choiceAgg } of choiceResults) {
+        if (Object.keys(choiceAgg).length > 0) {
+          let maxCount = 0;
+          let topOptId = '';
+          for (const [k, v] of Object.entries(choiceAgg)) {
+            const count = parseInt(v ?? '0');
+            if (count > maxCount) { maxCount = count; topOptId = k; }
           }
-        }
-        const option = q.options.find((o: { id: string; text: string }) => o.id === topOptId);
-        const existing = choiceStats[q.id];
-        if (!existing || maxCount > existing.count) {
-          choiceStats[q.id] = { count: maxCount, question: q.question, chosenSide: option?.text ?? topOptId };
+          const option = q.options.find((o: { id: string; text: string }) => o.id === topOptId);
+          const existing = choiceStats[q.id];
+          if (!existing || maxCount > existing.count) {
+            choiceStats[q.id] = { count: maxCount, question: q.question ?? '', chosenSide: option?.text ?? topOptId };
+          }
         }
       }
     }
 
-    const templateAgg = await redis.hGetAll(`TemplateAggregate:${d}:${dailyConfig.template?.id ?? ''}`);
+    // Template — already fetched in parallel batch above
     if (Object.keys(templateAgg).length > 0) {
       const allCells = dailyConfig.template?.cells?.flat() ?? [];
       let checkedCount = 0;
@@ -704,7 +704,7 @@ routes.get('/weekly/recap', async (c) => {
       bingoDayCount++;
     }
 
-    const confAgg = await redis.hGetAll(`ConfessionAggregate:${d}:${dailyConfig.confession?.id ?? ''}`);
+    // Confession — already fetched in parallel batch above
     if (Object.keys(confAgg).length > 0) {
       for (const v of Object.values(confAgg)) {
         totalConfessionVotes += parseInt(v ?? '0');
