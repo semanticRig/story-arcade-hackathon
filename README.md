@@ -99,12 +99,25 @@ npm run type-check && npm run lint && npm run build
 npm run dev          # Deploy to playtest subreddit
 ```
 
-## Known Limitations (Hackathon Alpha)
+## Retention Mechanics
 
-- **Reddit API rate limiting**: Content bank fetches from 4 subreddits (r/Showerthoughts, r/AskReddit, r/confession, r/unpopularopinion) are rate-limited during peak usage. Bingo tiles and confession text fall back to curated pools when Reddit API is unavailable. Planned improvement: increased rate-limit budget via Reddit developer program + pre-cached weekly content banks.
-- **Playtest-only deployment**: Currently tested on private playtest subreddit. Production deployment requires Reddit app review.
-- **30-second endpoint limit**: Weekly recap queries 7 days of Redis data sequentially. Optimization to parallelize with `Promise.all` is planned.
+Story Arcade is built around a multi-layered retention system:
+
+- **Daily rotation**: Fresh content generated every midnight from Reddit API — new mood options, polls, bingo tiles, confessions, and hot takes
+- **Streak tracking**: 3-day, 7-day, and 30-day streaks with badge unlocks and milestone toasts
+- **Weekly Personality Profile**: 23 unique personality labels computed from 7 days of play data — gives users a reason to complete every day
+- **Dynamic post titles**: Each day's Reddit post shows a different title based on yesterday's community mood ("Yesterday was 72% fired up...")
+- **Comment sharing**: Formatted receipts with monospace progress bars and streak motivation — turns every play session into a shareable Reddit comment
+
+## User Contributions
+
+UGC is central to the experience, not a side feature:
+
+- **Live Confessions Feed**: Users submit confessions that appear instantly in the community feed — every submission creates content others engage with
+- **Hall of Fame**: Top 10 prompt contributors displayed with submission counts and medals — incentivizes quality UGC
+- **Community Pixel Canvas**: Each user places one pixel per day — collaborative artwork emerges from community participation
+- **Prompt Submissions**: Users submit future prompts (choice questions, bingo ideas, confessions) that feed tomorrow's content pipeline
 
 ---
 
-Built for Reddit's "Games with a Hook" Hackathon.
+Built for Reddit's "Games with a Hook" Hackathon 2026.
