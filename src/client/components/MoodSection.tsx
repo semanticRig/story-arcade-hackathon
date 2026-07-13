@@ -10,18 +10,14 @@ export const MoodSection = ({ options, onSubmit }: Props) => {
   const [selected, setSelected] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [aggregate, setAggregate] = useState<Record<string, number> | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSelect = async (key: string) => {
     if (selected || submitting) return;
     setSubmitting(true);
-    setError(null);
     const res = await onSubmit(key);
     if (res) {
       setSelected(key);
       setAggregate(res.aggregate);
-    } else {
-      setError('Failed to submit. Try again?');
     }
     setSubmitting(false);
   };
@@ -59,9 +55,6 @@ export const MoodSection = ({ options, onSubmit }: Props) => {
           );
         })}
       </div>
-      {error && !selected && (
-        <p className="text-xs text-red-500 text-center mt-2">{error}</p>
-      )}
     </section>
   );
 };

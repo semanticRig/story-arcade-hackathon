@@ -23,6 +23,7 @@
     "@devvit/web": "0.13.6",
     "@hono/node-server": "2.0.5",
     "8bit-sound-engine": "^1.0.0",
+    "canvas-confetti": "^1.9.4",
     "devvit": "0.13.6",
     "hono": "4.12.27",
     "react": "19.2.7",
@@ -31,6 +32,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@tailwindcss/vite": "4.3.1",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",

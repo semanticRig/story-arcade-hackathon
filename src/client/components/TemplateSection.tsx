@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import confetti from 'canvas-confetti';
 import type { Template, TemplateSubmitResponse } from '../../shared/api';
 
 type Props = {
@@ -11,7 +12,6 @@ export const TemplateSection = ({ template, onSubmit }: Props) => {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<TemplateSubmitResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const hasBingo = useMemo(() => {
     if (template.type !== 'bingo') return false;
@@ -46,18 +46,24 @@ export const TemplateSection = ({ template, onSubmit }: Props) => {
   const handleSubmit = async () => {
     if (submitted || selected.size === 0 || submitting) return;
     setSubmitting(true);
-    setError(null);
     const res = await onSubmit(template.id, Array.from(selected));
     if (res) {
       setSubmitted(true);
       setResult(res);
-    } else {
-      setError('Failed to submit. Try again?');
     }
     setSubmitting(false);
   };
 
   const bingoCelebration = template.type === 'bingo' && submitted && hasBingo;
+
+  useEffect(() => {
+    if (bingoCelebration) {
+      const timer = setTimeout(() => {
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [bingoCelebration]);
 
   return (
     <section className={`bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 border border-amber-100 dark:border-gray-700 ${bingoCelebration ? 'animate-bingo' : ''}`}>
@@ -100,9 +106,6 @@ export const TemplateSection = ({ template, onSubmit }: Props) => {
             {submitting ? 'Submitting...' : 'Submit'}
           </button>
         </div>
-      )}
-      {error && !submitted && (
-        <p className="text-xs text-red-500 text-center mt-2">{error}</p>
       )}
       {submitted && result !== null && (
         <div className="text-center mt-3">

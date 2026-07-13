@@ -4,7 +4,9 @@
 // blocks — the only rendering surface Reddit comments support.
 // ---------------------------------------------------------------------------
 
-import type { ArcadeResults, WeeklyRecap } from './api';
+import type { ArcadeResults, TemplateCell, WeeklyRecap } from './api';
+import { PERSONALITY_DESCRIPTIONS } from './constants';
+import { getArchetypeById } from './archetypes';
 
 // ---------------------------------------------------------------------------
 // §4.3 — Reusable component snippets
@@ -42,73 +44,125 @@ export function spoiler(label: string, url: string): string {
   return `>!${label}!< [Open —>](${url})`;
 }
 
+
 // ---------------------------------------------------------------------------
-// Hero fact — picks the single most interesting result
+// §4.1 — Tier 1: per-user receipt comment (viral share-to-comment)
 // ---------------------------------------------------------------------------
 
-function heroFact(results: ArcadeResults): string {
-  if (results.pixelPlaced) {
-    return `Placed pixel at (${results.pixelPlaced.x}, ${results.pixelPlaced.y})`;
-  }
-  if (results.hotTakeVote) {
-    const labels: Record<string, string> = { agree: 'Agree', disagree: 'Disagree', unsure: 'Unsure' };
-    return `Vote locked in: ${labels[results.hotTakeVote] ?? results.hotTakeVote}`;
-  }
-  if (results.template && results.template.score > 0) {
-    return `Bingo: ${results.template.score}/9 squares`;
-  }
-  if (results.mood) {
-    return `${results.mood.emoji}  ${results.mood.label}`;
-  }
-  return 'Completed today\'s arcade';
+export interface ReceiptOpts {
+  templateGrid?: TemplateCell[][];
+  confessionAgreementPct?: number;
+  confessionTotalVotes?: number;
+  confessionText?: string;
+  moodCommunityPct?: number;
+  archetypeId?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Streak motivation line
-// ---------------------------------------------------------------------------
-
-function streakLine(days: number): string {
-  if (days === 0) return 'Your first day! Come back tomorrow to start a streak.';
-  const fires = '🔥'.repeat(Math.min(days, 3));
-  let motivation: string;
-  if (days < 3) {
-    motivation = `One more day ${days === 1 ? 'unlocks your first badge!' : 'keeps it going!'}`;
-  } else if (days < 7) {
-    motivation = `You're building momentum. Almost at the week milestone.`;
-  } else if (days === 7) {
-    motivation = 'A full week! You\'re unstoppable.';
-  } else {
-    motivation = 'Incredible dedication.';
-  }
-  return `${fires}  ${days}-day streak. ${motivation}`;
-}
-
-// ---------------------------------------------------------------------------
-// §4.1 — Tier 1: per-user receipt comment
-// ---------------------------------------------------------------------------
 
 /**
- * Formats the full comment body for the per-user result receipt.
- * One hero fact, one streak line, one hook + link, one signature line.
+ * Produces a rich, viral-worthy Reddit comment from the user's arcade results.
+ * Designed to be scannable and identity-affirming — a social object people
+ * want to share.
  */
 export function formatReceipt(
   results: ArcadeResults,
   subredditName: string,
-  postId: string,
+  opts: ReceiptOpts = {},
 ): string {
-  const hero = heroFact(results);
-  const streak = streakLine(results.streakDays);
-  const postUrl = `https://reddit.com/r/${subredditName}/comments/${postId}`;
+  const lines: string[] = [];
 
-  const lines: string[] = [
-    `**${hero}**`,
-    '',
-    streak,
-    '',
-    `Curious where the room landed? [See today's board —>](${postUrl})`,
-    '',
-    `^(story-arcade) ^(·) ^(r/${subredditName}) ^(·) ^(voting closes at reset)`,
-  ];
+  // ── 1. Header — archetype / identity ──
+  if (results.mood) {
+    lines.push(`**Today's Story: ${results.mood.emoji} ${results.mood.label}**`);
+  } else {
+    lines.push(`**Today's Story: ??? Unknown Mood ???**`);
+  }
+
+  // Archetype badge — shows what the player IS
+  if (opts.archetypeId) {
+    const archetype = getArchetypeById(opts.archetypeId);
+    if (archetype) {
+      lines.push('');
+      lines.push('```');
+      lines.push(archetype.sprite);
+      lines.push('```');
+      lines.push(`**You are: ${archetype.emoji} ${archetype.name}** (Tier ${archetype.tier})`);
+      lines.push(`> ${archetype.description}`);
+    }
+  }
+  lines.push('');
+
+  // ── 2. Bingo board visualization ──
+  if (results.template && opts.templateGrid) {
+    const checkedSet = new Set(results.template.cells);
+    const gridLines = opts.templateGrid.map((row) =>
+      row.map((cell) => (checkedSet.has(cell.id) ? '✅' : '⬜')).join(' '),
+    );
+    lines.push('```');
+    lines.push(...gridLines);
+    lines.push('```');
+    lines.push('');
+  }
+
+  // ── 3. Confession with spoiler tag ──
+  if (results.confession?.tag) {
+    const tag = results.confession.tag;
+    const pct = opts.confessionAgreementPct;
+    const total = opts.confessionTotalVotes ?? results.confession.totalVotes;
+    const countInfo = pct !== undefined ? ` (${pct}% of ${total} players agreed)` : '';
+    lines.push(`>!${tag}!<${countInfo}`);
+
+    const quoteText = results.confession.text ?? opts.confessionText;
+    if (quoteText) {
+      const truncated = quoteText.length > 140 ? `${quoteText.slice(0, 137)}...` : quoteText;
+      lines.push(`*"${truncated}"*`);
+    }
+    lines.push('');
+  }
+
+  // ── 4. Hot Take & Canvas ──
+  {
+    const snippets: string[] = [];
+    if (results.pixelPlaced) {
+      snippets.push(`\u{1F5BC} Pixel placed at (${results.pixelPlaced.x}, ${results.pixelPlaced.y})`);
+    }
+    if (results.hotTakeVote) {
+      const labels: Record<string, string> = { agree: 'Agree', disagree: 'Disagree', unsure: 'Unsure' };
+      const emoji: Record<string, string> = { agree: '\u2705', disagree: '\u274C', unsure: '\u{1F937}' };
+      const label = labels[results.hotTakeVote] ?? results.hotTakeVote;
+      const e = emoji[results.hotTakeVote] ?? '';
+      snippets.push(`${e} **${label}** on today's hot take`);
+    }
+    if (snippets.length > 0) {
+      lines.push(snippets.join('  \u2502  '));
+      lines.push('');
+    }
+  }
+
+  // ── 5. Streak + Badge line ──
+  if (results.streakDays > 0) {
+    const fires = '\u{1F525}'.repeat(Math.min(results.streakDays, 7));
+    const parts: string[] = [`${fires} ${results.streakDays}-day streak`];
+    if (results.badges.length > 0) {
+      parts.push(`${results.badges.length} badge${results.badges.length !== 1 ? 's' : ''}`);
+    }
+    lines.push(parts.join('  \u2022  '));
+  } else {
+    lines.push('Day 1 — start your streak tomorrow!');
+  }
+  lines.push('');
+
+  // ── 6. Community context ──
+  if (results.mood && opts.moodCommunityPct !== undefined) {
+    lines.push(`Your mood matched ${opts.moodCommunityPct}% of the community today`);
+    lines.push('');
+  }
+
+  // ── 7. Call to action ──
+  lines.push(`[Play tomorrow's arcade \u2192](https://reddit.com/r/${subredditName})`);
+  lines.push('');
+
+  // ── 8. Signature line ──
+  lines.push(`^(story-arcade) ^(\u00b7) ^(r/${subredditName}) ^(\u00b7) ^(today's arcade)`);
 
   return lines.join('\n');
 }
@@ -117,38 +171,12 @@ export function formatReceipt(
 // §4.2 — Tier 2: weekly recap share comment
 // ---------------------------------------------------------------------------
 
-const personalityDescriptions: Record<string, string> = {
-  'The Optimist': 'You see the bright side — even when things are on fire.',
-  'The Radiant Regular': 'You show up with good vibes every single day. Legendary.',
-  'The Deep Thinker': 'You feel things deeply. That\'s a superpower, not a weakness.',
-  'The Brooding Mastermind': 'Brooding with a plan. You\'re 3 steps ahead of everyone.',
-  'The Firebrand': 'You\'ve got passion. Channel it into something unstoppable.',
-  'The Fired Up': 'You came back angry and you came to win. Respect.',
-  'The Enthusiast': 'Your energy is contagious. Never let anyone dim it.',
-  'The Hype Architect': 'You don\'t just bring hype — you build it from the ground up.',
-  'The Survivor': 'You\'re still standing. That counts for everything.',
-  'The Committed Exhausted': 'Tired but here. That\'s the definition of dedication.',
-  'The Spiral Surfer': 'You ride the waves of anxiety like a pro. Somehow.',
-  'The Zen Master': 'Unbothered. Moisturized. In your lane. Thriving.',
-  'The Gremlin': 'Chaos is a ladder, and you\'re climbing it.',
-  'The Dreamer': 'Manifesting, believing, achieving. The whole package.',
-  'The Believer': 'You keep the faith. Even when the wifi drops.',
-  'The Indifferent': 'You\'re just here to vibe. No notes.',
-  'The Heartfelt': 'Out here catching feelings and winning hearts.',
-  'The Well-Done': 'You\'ve been through it. Came out seasoned.',
-  'The Time Traveler': 'Living in the past? It\'s called ✨aesthetic✨.',
-  'The Explorer': 'New experiences or bust. You\'re gonna need a bigger passport.',
-  'The Completionist': '7 out of 7 days. You don\'t miss. Ever.',
-  'The Story Arcadian': 'You\'re writing your own story. Keep going.',
-  'The Newcomer': 'Fresh meat. We love to see it.',
-};
-
 export function formatWeeklyRecap(
   recap: WeeklyRecap,
   subredditName: string,
   postId: string,
 ): string {
-  const desc = personalityDescriptions[recap.personalityLabel] ?? 'You are one of a kind.';
+  const desc = PERSONALITY_DESCRIPTIONS[recap.personalityLabel] ?? 'You are one of a kind.';
   const postUrl = `https://reddit.com/r/${subredditName}/comments/${postId}`;
 
   const daysBar = bar(Math.round((recap.totalDaysPlayed / 7) * 100), 20);

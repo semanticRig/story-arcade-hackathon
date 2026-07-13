@@ -73,13 +73,11 @@ function defaultConfig(date: string): DailyConfig {
 
 async function getNextQueuedConfig(): Promise<DailyConfig | null> {
   const queueKey = 'PromptQueue';
-  const queueData = await redis.get(queueKey);
-  const queue: string[] = queueData ? JSON.parse(queueData) : [];
-  if (queue.length === 0) return null;
+  const items = await redis.zRange(queueKey, 0, 0);
+  if (items.length === 0) return null;
 
-  const submissionId = queue.shift();
-  await redis.set(queueKey, JSON.stringify(queue));
-  if (!submissionId) return null;
+  const submissionId = items[0]!.member;
+  await redis.zRem(queueKey, [submissionId]);
 
   const raw = await redis.get(`PromptSubmission:${submissionId}`);
   if (!raw) return null;

@@ -10,7 +10,6 @@ export const ChoiceSection = ({ question, onSubmit }: Props) => {
   const [voted, setVoted] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [aggregate, setAggregate] = useState<Record<string, number> | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [customText, setCustomText] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customOptionId, setCustomOptionId] = useState<string | null>(null);
@@ -34,13 +33,10 @@ export const ChoiceSection = ({ question, onSubmit }: Props) => {
 
   const doSubmit = async (optionId: string, text?: string) => {
     setSubmitting(true);
-    setError(null);
     const res = await onSubmit(question.id, optionId, text);
     if (res) {
       setVoted(optionId);
       setAggregate(res.aggregate);
-    } else {
-      setError('Failed to submit. Try again?');
     }
     setSubmitting(false);
   };
@@ -72,7 +68,7 @@ export const ChoiceSection = ({ question, onSubmit }: Props) => {
                     ? 'border-amber-400 ring-2 ring-amber-300'
                     : voted
                     ? 'border-gray-200 dark:border-gray-700 opacity-60'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-amber-300 active:scale-[0.98]'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-amber-300 active:scale-95'
                 }`}
               >
                 <span className="relative z-10 text-sm font-medium dark:text-gray-300">{opt.text}</span>
@@ -112,9 +108,6 @@ export const ChoiceSection = ({ question, onSubmit }: Props) => {
           );
         })}
       </div>
-      {error && !voted && (
-        <p className="text-xs text-red-500 text-center mt-2">{error}</p>
-      )}
     </section>
   );
 };

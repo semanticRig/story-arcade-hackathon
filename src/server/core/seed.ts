@@ -98,13 +98,15 @@ export async function seedDemoData(): Promise<string[]> {
 
   // ── 5. User stats (streak + badges) ──
   // This gets read per-user so it only shows for this demo userId
+  // Uses JSON STRING format matching getUserStats() in api.ts (NOT HASH)
+  // Pro Brain [C1]: seed.ts wrote HASH, api.ts reads STRING — mismatch caused silent data loss
   const demoUserId = 'demo_player';
-  await redis.hSet(`UserStats:${demoUserId}`, {
-    streakDays: '7',
-    badges: JSON.stringify(['3-day', '7-day']),
-    totalDaysPlayed: '18',
+  await redis.set(`UserStats:${demoUserId}`, JSON.stringify({
+    streakDays: 7,
+    badges: ['3-day', '7-day'],
     lastPlayedDate: date,
-  });
+    roleTier: 'user',
+  }));
   logs.push('Seeded user stats (7-day streak, 2 badges)');
 
   await redis.set(seedKey, '1');

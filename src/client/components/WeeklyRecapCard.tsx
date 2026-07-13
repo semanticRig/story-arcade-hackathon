@@ -1,31 +1,7 @@
 import { useState } from 'react';
 import type { WeeklyRecapResponse } from '../../shared/api';
-
-const personalityDescriptions: Record<string, string> = {
-  'The Optimist': 'You see the bright side — even when things are on fire.',
-  'The Radiant Regular': 'You show up with good vibes every single day. Legendary.',
-  'The Deep Thinker': 'You feel things deeply. That\'s a superpower, not a weakness.',
-  'The Brooding Mastermind': 'Brooding with a plan. You\'re 3 steps ahead of everyone.',
-  'The Firebrand': 'You\'ve got passion. Channel it into something unstoppable.',
-  'The Fired Up': 'You came back angry and you came to win. Respect.',
-  'The Enthusiast': 'Your energy is contagious. Never let anyone dim it.',
-  'The Hype Architect': 'You don\'t just bring hype — you build it from the ground up.',
-  'The Survivor': 'You\'re still standing. That counts for everything.',
-  'The Committed Exhausted': 'Tired but here. That\'s the definition of dedication.',
-  'The Spiral Surfer': 'You ride the waves of anxiety like a pro. Somehow.',
-  'The Zen Master': 'Unbothered. Moisturized. In your lane. Thriving.',
-  'The Gremlin': 'Chaos is a ladder, and you\'re climbing it.',
-  'The Dreamer': 'Manifesting, believing, achieving. The whole package.',
-  'The Believer': 'You keep the faith. Even when the wifi drops.',
-  'The Indifferent': 'You\'re just here to vibe. No notes.',
-  'The Heartfelt': 'Out here catching feelings and winning hearts.',
-  'The Well-Done': 'You\'ve been through it. Came out seasoned.',
-  'The Time Traveler': 'Living in the past? It\'s called ✨aesthetic✨.',
-  'The Explorer': 'New experiences or bust. You\'re gonna need a bigger passport.',
-  'The Completionist': '7 out of 7 days. You don\'t miss. Ever.',
-  'The Story Arcadian': 'You\'re writing your own story. Keep going.',
-  'The Newcomer': 'Fresh meat. We love to see it.',
-};
+import { PERSONALITY_DESCRIPTIONS } from '../../shared/constants';
+import { getArchetypeById } from '../../shared/archetypes';
 
 type Props = {
   recap: WeeklyRecapResponse | null;
@@ -57,12 +33,37 @@ export const WeeklyRecapCard = ({ recap, loading, onClose, onShare }: Props) => 
               <p className="text-xs text-amber-500 dark:text-amber-400">ending {recap.weekEnding}</p>
             </div>
 
-            <div className="text-center mb-4">
-              <p className="text-2xl font-bold text-amber-900 dark:text-amber-200">{recap.personalityLabel}</p>
-              <p className="text-xs text-amber-600 dark:text-amber-400 italic mt-1">
-                {personalityDescriptions[recap.personalityLabel] ?? 'You are one of a kind.'}
-              </p>
-            </div>
+            {/* Archetype Identity */}
+            {(() => {
+              const archetype = recap.archetypeId ? getArchetypeById(recap.archetypeId) : undefined;
+              const desc = PERSONALITY_DESCRIPTIONS[recap.personalityLabel] ?? 'You are one of a kind.';
+              return (
+                <div className="text-center mb-4">
+                  {archetype ? (
+                    <>
+                      {/* 8-bit sprite */}
+                      <pre className="font-mono text-[7px] leading-[7px] tracking-[0px] inline-block select-none text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-gray-900 rounded p-1 mb-2 border border-amber-300 dark:border-amber-700"
+                           style={{ fontFamily: '"Courier New", monospace' }}>
+                        {archetype.sprite}
+                      </pre>
+                      <p className="text-xl font-bold text-amber-900 dark:text-amber-200 mt-1">
+                        {archetype.emoji} {archetype.name}
+                      </p>
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300 mt-1">
+                        Tier {archetype.tier}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold text-amber-900 dark:text-amber-200">{recap.personalityLabel}</p>
+                    </>
+                  )}
+                  <p className="text-xs text-amber-600 dark:text-amber-400 italic mt-2">
+                    {archetype ? archetype.description : desc}
+                  </p>
+                </div>
+              );
+            })()}
 
             <div className="space-y-2 mb-4">
               <div className="flex justify-between bg-amber-50 dark:bg-gray-700 rounded-xl px-3 py-2">

@@ -142,13 +142,16 @@ function selectBingoTiles(convoPool: string[], date: string, count: number): str
     if (!result.includes(short)) result.push(short);
   }
 
-  // Step 3: If Reddit pool was empty, fill remaining with more curated fillers
+  // Step 3: Fill remaining — cap curated fillers so stale content is VISIBLE
+  // When Reddit pool is empty (API failure), don't silently fill all slots —
+  // leave gaps so the staleness is obvious instead of camouflaging with fillers
+  const maxCurated = convoPool.length > 0 ? count : Math.max(curatedCount, Math.floor(count * 0.5));
   if (result.length < count) {
     const remaining = matchingFillers.filter(f => !result.includes(f.text));
     for (const f of remaining) {
-      if (result.length >= count) break;
+      if (result.length >= maxCurated) break;
       if (isBingoIrrelevant(f.text)) continue;
-      result.push(f.text);
+      if (!result.includes(f.text)) result.push(f.text);
     }
   }
 
@@ -244,8 +247,13 @@ const FALLBACK_HOT_TAKES = [
 
 /** Deterministic pick from a pool: same pool + same date = same result. */
 function pickByDate<T>(pool: T[], date: string): T {
+  return pickByDateIndex(pool, date, 0);
+}
+
+/** Like pickByDate but with an index for multiple picks from same date. */
+function pickByDateIndex<T>(pool: T[], date: string, index: number): T {
   const daySeed = (new Date(date).getTime() / 86400000) | 0;
-  const hash = Math.abs(pool.length * Math.sin(daySeed * 13.37)) | 0;
+  const hash = Math.abs(pool.length * Math.sin(daySeed * 13.37 + index * 2.71)) | 0;
   return pool[hash % pool.length]!;
 }
 
@@ -409,10 +417,19 @@ export async function buildContentBank(limit = 30): Promise<void> {
   await redis.set('ContentBank:unpopularopinion', JSON.stringify(opinions));
   await redis.set('ContentBank:Showerthoughts', JSON.stringify(showerThoughts));
   await redis.del('ContentBank:used');
-  console.log(`[bank] Stored ${askReddit.length} AskReddit, ${confessions.length} confession, ${opinions.length} unpopularopinion, ${showerThoughts.length} Showerthoughts`);
+
+  // Bank health: count how many sources have actual content
+  const healthyCount = [askReddit, confessions, opinions, showerThoughts].filter(a => a.length > 0).length;
+  const bankHealthy = healthyCount >= 2;
+  console.log(`[bank] Stored ${askReddit.length} AskReddit, ${confessions.length} confession, ${opinions.length} unpopularopinion, ${showerThoughts.length} Showerthoughts (healthy=${bankHealthy})`);
+
+  // Pro Brain [Issue 1]: Don't cache failed banks for 2 days — use 1h TTL on unhealthy banks
+  const ttl = bankHealthy ? 172800 : 3600;
+  await redis.set('ContentBank:meta', JSON.stringify({ lastBuilt: Date.now(), healthy: bankHealthy, healthyCount, ttl }));
+  await redis.expire('ContentBank:meta', ttl);
 
   for (const key of ['ContentBank:AskReddit', 'ContentBank:confession', 'ContentBank:unpopularopinion', 'ContentBank:Showerthoughts']) {
-    await redis.expire(key, 172800);
+    await redis.expire(key, ttl);
   }
 }
 
@@ -560,8 +577,9 @@ export async function generateDailyContent(): Promise<{
 
   // Fallback: if fewer than 2 questions, fill with ultra-safe defaults
   while (questions.length < 2) {
-    const fallbackQuestion = pickByDate(FALLBACK_QUESTIONS, `${date}_q_${questions.length}`);
-    const fallbackSet = FALLBACK_OPTIONS[questions.length % FALLBACK_OPTIONS.length]!;
+    const idx = questions.length;
+    const fallbackQuestion = pickByDateIndex(FALLBACK_QUESTIONS, date, idx);
+    const fallbackSet = FALLBACK_OPTIONS[idx % FALLBACK_OPTIONS.length]!;
     const prefix = `q_${date}_${questions.length + 1}`;
     const letters = ['a', 'b', 'c'];
     const options = fallbackSet.map((text, i) => ({

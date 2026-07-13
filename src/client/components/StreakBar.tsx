@@ -1,12 +1,13 @@
 type Props = {
   streakDays: number;
   badges: string[];
+  glow?: boolean;
 };
 
-export const StreakBar = ({ streakDays, badges }: Props) => {
+export const StreakBar = ({ streakDays, badges, glow }: Props) => {
   const fireEmoji = streakDays > 0 ? '🔥'.repeat(Math.min(streakDays, 5)) : '💤';
   return (
-    <div className="flex items-center gap-2">
+    <div className={`flex items-center gap-2 rounded-full px-2 py-0.5 ${glow ? 'animate-streak-glow' : ''}`}>
       <span className={`text-sm ${streakDays > 0 ? 'animate-pulse' : ''}`}>{fireEmoji}</span>
       <span className="text-sm font-bold text-amber-700">{streakDays}</span>
       {badges.length > 0 && (

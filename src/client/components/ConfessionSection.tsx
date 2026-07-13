@@ -10,18 +10,14 @@ export const ConfessionSection = ({ confession, onSubmit }: Props) => {
   const [voted, setVoted] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ConfessionVoteResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const handleVote = async (tag: string) => {
     if (voted || submitting) return;
     setSubmitting(true);
-    setError(null);
     const res = await onSubmit(confession.id, tag);
     if (res) {
       setVoted(tag);
       setResult(res);
-    } else {
-      setError('Failed to submit tag. Try again?');
     }
     setSubmitting(false);
   };
@@ -58,9 +54,6 @@ export const ConfessionSection = ({ confession, onSubmit }: Props) => {
       </div>
       {submitting && !voted && (
         <p className="text-xs text-amber-400 text-center mt-2 animate-pulse">submitting...</p>
-      )}
-      {error && !voted && (
-        <p className="text-xs text-red-500 text-center mt-2">{error}</p>
       )}
       {result && (
         <div className="flex justify-center mt-3 pt-2 border-t border-amber-100 dark:border-gray-700 animate-reveal-slide">
