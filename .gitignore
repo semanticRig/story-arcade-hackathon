@@ -3,3 +3,14 @@ node_modules
 dist
 .env
 .env.template
+
+# Agent instructions and internal docs ; judges see code only
+agent_docs/
+research/
+*.md
+!README.md
+!LICENSE
+STORY_ARCADE_COMMENT_REDESIGN.md
+SUBMISSION_REMINDER.md
+AGENTS.md
+CLAUDE.md

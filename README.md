@@ -1,93 +1,130 @@
 # Story Arcade
 
-**A daily emotional story-game inside a Reddit post.** Tell your story, see how the room feels, and build something together — one day at a time.
+**A daily emotional story-game that lives inside a Reddit post.** Pick your mood ; vote on polls sourced from real Reddit comments ; mark your life bingo ; tag anonymous confessions. Build a streak, unlock your personality archetype, and watch the community canvas come alive.
+
+`Devvit Web` `React 19` `TypeScript` `Redis` `Hono` `Vite 8`
 
 ---
 
-## What is Story Arcade?
+## The Hook ; Why Redditors Return Daily
 
-Every day, a new Reddit post appears with a fresh arcade. You walk through 5 sections:
+This is the "hook-y" part. Every mechanism is designed to pull you back tomorrow:
 
-| Section | What you do | Instant payoff |
-|---------|-------------|----------------|
-| **Mood Check** | Tap how you feel | See the community mood aggregate live |
-| **This or That** | Vote on 2 polls | Live percentage bars from real Reddit comments |
-| **Life Bingo** | Tap 9 cells that apply | Score tallied, cells sourced from r/Showerthoughts |
-| **Confession Corner** | Tag a daily confession | Community verdict on Relatable/WTF/Wholesome |
-| **Community Arena** | Place 1 pixel, vote hot takes, submit confessions | See the canvas emerge, feed populates in real time |
-
-As you play, you build **streaks** (3-day, 7-day, 30-day), earn **badges**, and unlock your **Weekly Personality Profile** — 23 unique labels from "The Hype Architect" to "The Gremlin."
+| Mechanism | How It Works | Retention Signal |
+|-----------|-------------|------------------|
+| **Streak System** | 3-day, 7-day, 30-day badges with confetti celebrations | Internal calendar ; "don't break the chain" |
+| **Grace Period** | Miss a day? Streak freezes for 48 hours | Loss aversion ; one slip doesn't kill the streak |
+| **Personality Archetypes** | 12 archetype lines ; 37 total ; your mood history assigns you one | Identity investment ; "I'm The Radiant this week" |
+| **Daily Rotation** | New mood prompt, polls, bingo, confession every 24h at midnight UTC | Appointment mechanic ; FOMO if you miss a day |
+| **Live Community** | Canvas updates every 8s ; confession feed populates in real time | Social proof ; "X players today" header badge |
+| **UGC Pipeline** | Players submit tomorrow's prompts ; mods approve ; best ones ship | Ownership ; "my prompt might be tomorrow's game" |
+| **Personality Reveal** | Weekly recap shows your archetype evolution with 8-bit sprite | Sunday morning ritual ; screenshot worthy |
 
 ---
 
-## Why this belongs on Reddit
+## Play the Demo
 
-- **Every interaction creates content** — confessions appear in a live feed, pixels paint a shared canvas, poll results become discussion threads
-- **Built FOR Reddit's feed** — dynamic post titles based on yesterday's community mood: "Yesterday was 72% fired up energy. How are you showing up today?"
-- **Streaks + badges = daily ritual** — the hook that brings people back
-- **Share to comments** — formatted receipts with monospace progress bars, hero facts, and streak motivation
+**Live Reddit post:** [r/StoryArcadePlaytest](https://reddit.com/r/StoryArcadePlaytest)
+
+**60-second walkthrough:**
+
+1. Open the post ; tap your mood (5 options, emoji + label)
+2. Vote on two "This or That" polls (options sourced from real Reddit comments)
+3. Fill out your Life Bingo (9 cells from r/Showerthoughts + curated pool)
+4. Tag the daily confession (Relatable / WTF / Wholesome / Needs Therapy)
+5. Community Arena unlocks after your first interaction:
+   - Place 1 pixel on the collaborative 16x16 canvas
+   - Vote on the daily hot take (Agree / Disagree / Unsure)
+   - Submit your own confession to the live feed
+   - Check the Hall of Fame leaderboard
+
+---
+
+## Daily Flow ; User Journey
+
+| Section | You Do | You See After | The Hook |
+|---------|--------|---------------|----------|
+| **Mood Check** | Tap how you feel | Community mood distribution + your streak count | Streak ticks on *any* submit |
+| **This or That** | Pick A or B on 2 polls | Live percentage bars ; option to write your own answer | "I can't believe 73% chose B" ; comment bait |
+| **Life Bingo** | Tap cells that apply to your day | Score + heatmap ; confetti on bingo | Collection urge ; "I need to fill the grid tomorrow" |
+| **Confession Corner** | Tag an anonymous confession | Majority verdict + tag breakdown | "Needs Therapy" winner = instant comment thread |
+| **Community Arena** | Pixel canvas ; hot takes ; confession feed ; hall of fame | Live-updating community dashboard | Social comparison ; "my pixel is still there" |
+
+---
+
+## Architecture
+
+Built entirely on Reddit's Devvit platform ; zero external infrastructure:
+
+```
+Reddit Post Webview (React 19)
+  │
+  ├; /api/daily-config     ; Today's game content
+  ├; /api/mood/submit      ; Mood picker
+  ├; /api/choice/submit    ; Poll votes
+  ├; /api/template/submit  ; Bingo / finger-down
+  ├; /api/confession/vote  ; Confession tags
+  ├; /api/canvas/*         ; Collaborative pixel grid
+  ├; /api/hot-take/*       ; Hot take votes
+  ├; /api/confessions/*    ; Community confession feed
+  ├; /api/prompts/*        ; UGC prompt pipeline
+  ├; /api/results/comment  ; Share to Reddit comments
+  └; /api/weekly/recap     ; Personality archetype reveal
+            │
+    Hono Server (Devvit server runtime)
+            │
+   Redis (Devvit built-in SDK)
+            │
+  Daily Cron Job ; New post at midnight UTC
+            │
+  Reddit API ; r/Showerthoughts, r/AskReddit, r/confession, r/unpopularopinion
+```
+
+| Constraint | How We Handle It |
+|-----------|-----------------|
+| **30s timeout per endpoint** | All Redis ops batched ; weekly recap cached at 1h TTL |
+| **No websockets** | Client polling at 8s intervals with visibility-aware pauses |
+| **No external fetch from client** | All Reddit API calls happen server-side in cron job |
+| **No localStorage** | Everything in Redis ; `UserStats`, `DailyConfig`, all aggregates |
+| **5MB Redis limit** | Daily-scoped data has 30-day TTL ; confession feed capped at 100 |
+| **No native modules** | Pure TypeScript ; canvas-confetti only npm dependency added |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Platform | Reddit Devvit Web (embedded in Reddit posts) |
-| Client | React 19, Tailwind CSS 4, TypeScript |
-| Server | Hono (Node.js), TypeScript |
-| State | Redis (Devvit built-in) |
-| Content | Reddit API (r/Showerthoughts, r/AskReddit, r/confession, r/unpopularopinion) |
-| Sound | 8-bit sound engine, retro arcade music toggle |
-| Build | Vite 8, npm |
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| Platform | Reddit Devvit Web | Native ; zero infra |
+| Client | React 19 + TypeScript + Tailwind CSS 4 | Devvit template ; type-safe |
+| Server | Hono (Node.js) | <10KB ; fast cold start |
+| State | Redis via `@devvit/server` SDK | Built-in ; atomic INCR / SET NX / HINCRBY |
+| Content | Reddit API (`getHotPosts`, `getComments`) | Real subreddit content every day |
+| Build | Vite 8 + npm | Fast HMR ; tree-shaking |
+| Animation | CSS keyframes + canvas-confetti (6KB) | No framework bloat |
 
 ---
 
-## For Judges
+## Polish ; What Makes It Feel Premium
 
-### How to test
-1. Open the post in any subreddit with the Story Arcade app installed
-2. Complete all 5 sections (takes ~60 seconds)
-3. Explore the Community Arena (canvas, hot takes, confessions, Hall of Fame)
-4. Click "Share to Comments" to see the formatted receipt
-5. Open "My Week" for your personality profile
-
-### What to look for
-- **Progressive reveal**: Community Arena appears after your first interaction — no completion gate
-- **Content freshness**: Bingo tiles come from real r/Showerthoughts posts, poll options from Reddit comments
-- **UGC flywheel**: Submit a confession → appears in the feed instantly → others see it
-- **Mobile-first**: 44px tap targets, touch-friendly spacing, progress bar in header
-- **Dynamic posts**: Each day's post title changes based on the previous day's mood
-
-### Demo data
-If the community sections appear empty, click the "Seed Demo" button (bottom right) to populate 7 days of moods, a smiley face on the canvas, confessions, and Hall of Fame entries.
+- **canvas-confetti** on bingo completion, streak milestones, and first-day finish
+- **Live polling** ; canvas refreshes every 8s with pixel delta badges ("+3 new pixels!")
+- **Next-arcade countdown** in header ; "Reset in 04:32:15"
+- **Mobile-first** ; 44px minimum touch targets ; `touch-action: manipulation` on all buttons
+- **Reduced motion** ; all 20+ animations disabled when `prefers-reduced-motion: reduce`
+- **Stale banner** ; if you're viewing yesterday's post, a banner offers "Play Today's Arcade"
+- **8-bit chiptune BGM** ; retro arcade music toggle (Web Audio API)
 
 ---
 
-## Project Structure
+## UGC Pipeline
 
-```
-src/
-├── client/
-│   ├── components/   # React components (15 total)
-│   │   ├── DailyArcadeScreen.tsx
-│   │   ├── MoodSection.tsx, ChoiceSection.tsx
-│   │   ├── TemplateSection.tsx, ConfessionSection.tsx
-│   │   ├── ResultsCard.tsx, WeeklyRecapCard.tsx
-│   │   ├── DailyCanvasSection.tsx, HotTakeSection.tsx
-│   │   ├── LiveConfessionsFeed.tsx, HallOfFameSection.tsx
-│   │   ├── StreakBar.tsx, RetroIcons.tsx, SubmitPromptModal.tsx
-│   │   └── MusicToggle.tsx, Toast.tsx
-│   ├── hooks/        # React hooks
-│   └── index.css     # Tailwind + custom animations
-├── server/
-│   ├── routes/api.ts # 18 API endpoints
-│   ├── core/         # Content generation, seeding
-│   └── jobs/         # Daily rotation cron
-└── shared/
-    ├── api.ts        # Shared types
-    └── commentFormat.ts  # Comment formatting
-```
+1. **Player submits** a prompt via "+ Submit Prompt" button (choice question, bingo idea, or confession)
+2. **Lands in moderation queue** ; `PromptQueue` in Redis ; `status: pending`
+3. **Moderators approve/reject** via `/api/prompts/moderate` (reject with reason if needed)
+4. **Approved prompts** enter FIFO rotation ; consumed by daily cron job
+5. **"My Submissions" panel** shows each player their submission status
+6. **Fallback** ; curated pools of 20+ questions, 46 bingo fillers, 19 confessions ; never an empty day
 
 ---
 
@@ -95,16 +132,15 @@ src/
 
 ```bash
 npm install
-npm run type-check && npm run lint && npm run build
-npm run dev          # Deploy to playtest subreddit
+npm run type-check && npm run lint && npm run build   # All clean
+npm run dev                                             # Deploy to playtest subreddit
+npx vitest run                                          # 13 tests passing
 ```
-
-## Known Limitations (Hackathon Alpha)
-
-- **Reddit API rate limiting**: Content bank fetches from 4 subreddits (r/Showerthoughts, r/AskReddit, r/confession, r/unpopularopinion) are rate-limited during peak usage. Bingo tiles and confession text fall back to curated pools when Reddit API is unavailable. Planned improvement: increased rate-limit budget via Reddit developer program + pre-cached weekly content banks.
-- **Playtest-only deployment**: Currently tested on private playtest subreddit. Production deployment requires Reddit app review.
-- **30-second endpoint limit**: Weekly recap queries 7 days of Redis data sequentially. Optimization to parallelize with `Promise.all` is planned.
 
 ---
 
-Built for Reddit's "Games with a Hook" Hackathon.
+## Credits
+
+Built for Reddit's **Games with a Hook** Hackathon 2026. Devvit Web platform by Reddit. MIT License.
+
+Voice principle: every prompt sounds like a redditor at 2am ; specific, slightly unhinged, never corporate.
